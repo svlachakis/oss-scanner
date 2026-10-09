@@ -1,0 +1,28 @@
+name: Verify Nethermind enrollment
+on:
+  push:
+    branches: [verify-nethermind-enrollment]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install validator dependency
+        run: |
+          python3 -m venv /tmp/scanner-venv
+          /tmp/scanner-venv/bin/pip install PyYAML
+      - name: Validate enrollment
+        run: /tmp/scanner-venv/bin/python tools/validate.py
+      - name: Build with the official scanner check
+        run: /tmp/scanner-venv/bin/python tools/check nethermind --no-shell --dir /tmp/scanner-check
+      - name: Run offline tests in the finished scanner image
+        timeout-minutes: 20
+        run: |
+          docker run --rm --init --network none --cpus 2 --memory 8g -w /src oss-scanner-check/built:nethermind bash -e -c '
+            dotnet test --project src/Nethermind/Nethermind.Evm.Test/Nethermind.Evm.Test.csproj -c Release --no-build --no-restore
+            dotnet test --project src/Nethermind/Nethermind.Network.Test/Nethermind.Network.Test.csproj -c Release --no-build --no-restore
+            dotnet test --project src/Nethermind/Nethermind.JsonRpc.Test/Nethermind.JsonRpc.Test.csproj -c Release --no-build --no-restore
+          '
